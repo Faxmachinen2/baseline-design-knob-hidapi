@@ -161,11 +161,12 @@ STATIC_ASSERT(sizeof(hid_report_set_config_t) == 32);
 
 typedef struct {
     uint8_t report_id;
+    uint8_t layer;
     int16_t raw_delta;  // Without acceleration/sensitivity
     uint8_t clockwise : 1;
     uint8_t : 7;  // Padding
     int32_t modified_delta;  // With acceleration/sensitivity
-    uint8_t pad00[24];  // Padding
+    uint8_t pad00[23];  // Padding
 } __attribute__((packed)) hid_report_wheel_t;
 STATIC_ASSERT(sizeof(hid_report_wheel_t) == 32);
 const hid_report_wheel_t default_hid_report_wheel = { .report_id = HID_REPORT_ID_WHEEL };
@@ -180,10 +181,11 @@ const button_state_t default_button_state = { 0 };
 
 typedef struct {
     uint8_t report_id;
+    uint8_t layer;
     button_state_t state;
     button_state_t pressed;
     button_state_t released;
-    uint8_t pad00[28];  // Pad
+    uint8_t pad00[27];  // Pad
 } __attribute__((packed)) hid_report_button_t;
 STATIC_ASSERT(sizeof(hid_report_button_t) == 32);
 const hid_report_button_t default_hid_report_button = { .report_id = HID_REPORT_ID_BUTTON };
@@ -308,6 +310,7 @@ static void housekeeping_task_knob_modes(void) {
 
 #    ifdef RAW_ENABLE
     hid_report_wheel_t hid_report_wheel = default_hid_report_wheel;
+    hid_report_wheel.layer = get_highest_layer(layer_state);
     hid_report_wheel.raw_delta = knob_state.accumulator;
     hid_report_wheel.clockwise = (knob_state.accumulator > 0) ? 1 : 0;
 #    endif  // RAW_ENABLE
@@ -525,10 +528,13 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
         if (config->set_update_throttle > 0) {
             hid_config.update_throttle = config->update_throttle < MINIMUM_UPDATE_THROTTLE ? MINIMUM_UPDATE_THROTTLE : config->update_throttle;
         }
-    }
 #    ifdef VIA_ENABLE
-    return true;
+        return true;  // Message handled
+    }
+    else {
+        return false;
 #    endif  // VIA_ENABLE
+    }
 }
 #    endif  // RAW_ENABLE
 
@@ -559,6 +565,8 @@ void housekeeping_task_kb(void) {
 button_state_t button_state = default_button_state;
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     hid_report_button_t report = default_hid_report_button;
+    report.layer = get_highest_layer(layer_state);
+
     uint8_t pressed = (record->event.pressed) ? 1 : 0;
     uint8_t released = 1 - pressed;
     switch (record->event.key.col)
