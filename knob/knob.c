@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <math.h>
+#include <assert.h>
 
 // #include "baseline_design/knob/post_config.h"
 #include "i2c_master.h"
@@ -134,6 +135,30 @@ typedef struct {
 } knob_state_t;
 
 #    ifdef RAW_ENABLE
+#    define HID_REPORT_ID_SET_CONFIG 0xb1
+#    define HID_REPORT_ID_WHEEL 0xa1
+#    define HID_REPORT_ID_BUTTON 0xa2
+#    define MINIMUM_UPDATE_THROTTLE 10
+
+typedef struct {
+    uint16_t wheel_deadzone;
+    uint16_t update_throttle;
+} hid_config_t;
+const hid_config_t default_hid_config = { .wheel_deadzone = 5, .update_throttle = 2 * KNOB_THROTTLE_MS };
+hid_config_t hid_config = default_hid_config;
+
+typedef struct {
+    uint8_t report_id;
+    uint16_t set_wheel_deadzone : 1;
+    uint16_t set_update_throttle : 1;
+    uint16_t : 14;  // Reserved
+    uint8_t reserved00;
+    uint16_t wheel_deadzone;
+    uint16_t update_throttle;
+    uint8_t reserved01[24];
+} __attribute__((packed)) hid_report_set_config_t;
+STATIC_ASSERT(sizeof(hid_report_set_config_t) == 32);
+
 typedef struct {
     uint8_t report_id;
     int16_t raw_delta;  // Without acceleration/sensitivity
@@ -143,7 +168,7 @@ typedef struct {
     uint8_t pad00[24];  // Padding
 } __attribute__((packed)) hid_report_wheel_t;
 STATIC_ASSERT(sizeof(hid_report_wheel_t) == 32);
-const hid_report_wheel_t default_hid_report_wheel = { .report_id = 0x01 };
+const hid_report_wheel_t default_hid_report_wheel = { .report_id = HID_REPORT_ID_WHEEL };
 
 typedef struct {
     uint8_t left : 1;
@@ -161,7 +186,7 @@ typedef struct {
     uint8_t pad00[28];  // Pad
 } __attribute__((packed)) hid_report_button_t;
 STATIC_ASSERT(sizeof(hid_report_button_t) == 32);
-const hid_report_button_t default_hid_report_button = { .report_id = 0x02 };
+const hid_report_button_t default_hid_report_button = { .report_id = HID_REPORT_ID_BUTTON };
 #    endif  // RAW_ENABLE
 
 knob_config_t knob_config = {0};
@@ -271,8 +296,12 @@ static void housekeeping_task_knob_modes(void) {
         knob_state.last_motion_time = current_time;
     }
 
-    // throttle rate at which actions are performed
+// throttle rate at which actions are performed
+#    ifdef RAW_ENABLE
+    if (TIMER_DIFF_32(current_time, knob_state.last_action_time) < hid_config.update_throttle) {
+#    else
     if (TIMER_DIFF_32(current_time, knob_state.last_action_time) < KNOB_THROTTLE_MS) {
+#    endif  // RAW_ENABLE
         return;
     }
     knob_state.last_action_time = current_time;
@@ -344,7 +373,12 @@ static void housekeeping_task_knob_modes(void) {
 #    endif  // POINTING_DEVICE_ENABLE
 #    ifdef RAW_ENABLE
     hid_report_wheel.modified_delta = (int32_t)delta_truncated;
-    raw_hid_send((uint8_t*)&hid_report_wheel, sizeof(hid_report_wheel_t));
+    if (hid_report_wheel.raw_delta > ((int16_t)hid_config.wheel_deadzone)
+     || hid_report_wheel.raw_delta < -((int16_t)hid_config.wheel_deadzone)
+     || hid_report_wheel.modified_delta > ((int32_t)hid_config.wheel_deadzone)
+     || hid_report_wheel.modified_delta < -((int32_t)hid_config.wheel_deadzone)) {
+        raw_hid_send((uint8_t*)&hid_report_wheel, sizeof(hid_report_wheel_t));
+    }
 #    endif  // RAW_ENABLE
     switch (knob_config.mode) {
 #    ifdef ENCODER_ENABLE
@@ -475,6 +509,28 @@ void set_knob_config(knob_config_t config) {
 void reset_knob_config(void) {
     set_knob_config(default_knob_config);
 }
+
+#    ifdef RAW_ENABLE
+#    ifdef VIA_ENABLE
+bool via_command_kb(uint8_t *data, uint8_t length) {
+#    else
+void raw_hid_receive(uint8_t *data, uint8_t length) {
+#    endif  // VIA_ENABLE
+    assert(length == 32);
+    if (data[0] == HID_REPORT_ID_SET_CONFIG) {
+        hid_report_set_config_t *config = (hid_report_set_config_t*)data;
+        if (config->set_wheel_deadzone > 0) {
+            hid_config.wheel_deadzone = config->wheel_deadzone;
+        }
+        if (config->set_update_throttle > 0) {
+            hid_config.update_throttle = config->update_throttle < MINIMUM_UPDATE_THROTTLE ? MINIMUM_UPDATE_THROTTLE : config->update_throttle;
+        }
+    }
+#    ifdef VIA_ENABLE
+    return true;
+#    endif  // VIA_ENABLE
+}
+#    endif  // RAW_ENABLE
 
 #endif // !KNOB_MINIMAL
 
