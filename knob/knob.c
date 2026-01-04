@@ -132,6 +132,36 @@ typedef struct {
 #    endif  // POINTING_DEVICE_ENABLE
 } knob_state_t;
 
+#    ifdef RAW_ENABLE
+#    pragma pack(push,1)
+typedef struct {
+    uint8_t report_id = 0x01;  // Wheel 
+    int16_t raw_delta;  // Without acceleration/sensitivity
+    uint8_t clockwise : 1;
+    uint8_t : 7;  // Padding
+    int32_t modified_delta;  // With acceleration/sensitivity
+    uint8_t[23];  // Padding
+} hid_report_wheel_t;
+static_assert(sizeof(hid_report_wheel_t) == 32, "Size of hid_report_wheel_t must be 32");
+
+typedef struct {
+    uint8_t left : 1;
+    uint8_t middle : 1;
+    uint8_t right : 1;
+    uint8_t : 5;  // pad
+} button_state_t;
+
+typedef struct {
+    uint8_t report_id = 0x02;  // Button
+    button_state_t state;
+    button_state_t pressed;
+    button_state_t released;
+    uint8_t[29]  // Pad
+} hid_report_button_t;
+static_assert(sizeof(hid_report_button_t) == 32, "Size of hid_report_button_t must be 32");
+#    pragma pack(pop)
+#    endif  // RAW_ENABLE
+
 knob_config_t knob_config = {0};
 knob_state_t knob_state = {0};
 uint32_t current_time = 0;
@@ -245,6 +275,12 @@ static void housekeeping_task_knob_modes(void) {
     }
     knob_state.last_action_time = current_time;
 
+#    ifdef RAW_ENABLE
+    hid_report_wheel_t hid_report_wheel = {0};
+    hid_report_wheel.raw_delta = knob_state.accumulator;
+    hid_report_wheel.clockwise = (knob_state.accumulator > 0) ? 1 : 0;
+#    endif  // RAW_ENABLE
+
     // zero out the accumulator when ready to perform an action
     float delta = knob_state.accumulator;
     knob_state.accumulator = 0;
@@ -304,6 +340,10 @@ static void housekeeping_task_knob_modes(void) {
 #    ifdef POINTING_DEVICE_ENABLE
     report_mouse_t mouse;
 #    endif  // POINTING_DEVICE_ENABLE
+#    ifdef RAW_ENABLE
+    hid_report_wheel.modified_delta = (int32_t)delta_truncated;
+    raw_hid_send((uint8_t*)&hid_report_wheel, sizeof(hid_report_wheel_t));
+#    endif  // RAW_ENABLE
     switch (knob_config.mode) {
 #    ifdef ENCODER_ENABLE
         case KNOB_MODE_ENCODER:
@@ -456,3 +496,31 @@ void housekeeping_task_kb(void) {
 #endif // !KNOB_MINIMAL
     housekeeping_task_user();
 }
+
+#    ifdef RAW_ENABLE
+button_state_t button_state = {0};
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    hid_report_button_t report = {0};
+    uint8_t pressed = (record->event.pressed) ? 1 : 0;
+    uint8_t released = 1 - pressed;
+    switch (record->event.key.col)
+    {
+        case 0:
+            button_state.left = report.pressed.left = pressed;
+            report.released.left = released;
+            break;
+        case 1:
+            button_state.middle = report.pressed.middle = pressed;
+            report.released.middle = released;
+            break;
+        case 2:
+            button_state.right = report.pressed.right = pressed;
+            report.released.right = released;
+            break;
+    }
+    report.state = button_state;
+    raw_hid_send((uint8_t*)&report, sizeof(hid_report_button_t));
+
+    return true;  // Tell QMK to keep processing
+}
+#    endif  // RAW_ENABLE
