@@ -8,8 +8,8 @@
 #include "modifiers.h"
 #include "knob.h"
 
-#include "/data/software/qmk/qmk_firmware/keyboards/baseline_design/knob/knob.h"
-#include "/data/software/qmk/qmk_firmware/keyboards/baseline_design/knob/keymaps/via/config.h"
+#include "../../knob.h"
+#include "./config.h"
 
 // clang-format off
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {

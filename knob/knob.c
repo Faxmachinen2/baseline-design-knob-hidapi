@@ -9,6 +9,7 @@
 // #include "pointing_device.h"
 // #include "report.h"
 // #include "timer.h"
+#include "raw_hid.h"
 
 #include "knob.h"
 
@@ -133,33 +134,34 @@ typedef struct {
 } knob_state_t;
 
 #    ifdef RAW_ENABLE
-#    pragma pack(push,1)
 typedef struct {
-    uint8_t report_id = 0x01;  // Wheel 
+    uint8_t report_id;
     int16_t raw_delta;  // Without acceleration/sensitivity
     uint8_t clockwise : 1;
     uint8_t : 7;  // Padding
     int32_t modified_delta;  // With acceleration/sensitivity
-    uint8_t[23];  // Padding
-} hid_report_wheel_t;
-static_assert(sizeof(hid_report_wheel_t) == 32, "Size of hid_report_wheel_t must be 32");
+    uint8_t pad00[24];  // Padding
+} __attribute__((packed)) hid_report_wheel_t;
+STATIC_ASSERT(sizeof(hid_report_wheel_t) == 32);
+const hid_report_wheel_t default_hid_report_wheel = { .report_id = 0x01 };
 
 typedef struct {
     uint8_t left : 1;
     uint8_t middle : 1;
     uint8_t right : 1;
     uint8_t : 5;  // pad
-} button_state_t;
+} __attribute__((packed)) button_state_t;
+const button_state_t default_button_state = { 0 };
 
 typedef struct {
-    uint8_t report_id = 0x02;  // Button
+    uint8_t report_id;
     button_state_t state;
     button_state_t pressed;
     button_state_t released;
-    uint8_t[29]  // Pad
-} hid_report_button_t;
-static_assert(sizeof(hid_report_button_t) == 32, "Size of hid_report_button_t must be 32");
-#    pragma pack(pop)
+    uint8_t pad00[28];  // Pad
+} __attribute__((packed)) hid_report_button_t;
+STATIC_ASSERT(sizeof(hid_report_button_t) == 32);
+const hid_report_button_t default_hid_report_button = { .report_id = 0x02 };
 #    endif  // RAW_ENABLE
 
 knob_config_t knob_config = {0};
@@ -276,7 +278,7 @@ static void housekeeping_task_knob_modes(void) {
     knob_state.last_action_time = current_time;
 
 #    ifdef RAW_ENABLE
-    hid_report_wheel_t hid_report_wheel = {0};
+    hid_report_wheel_t hid_report_wheel = default_hid_report_wheel;
     hid_report_wheel.raw_delta = knob_state.accumulator;
     hid_report_wheel.clockwise = (knob_state.accumulator > 0) ? 1 : 0;
 #    endif  // RAW_ENABLE
@@ -498,9 +500,9 @@ void housekeeping_task_kb(void) {
 }
 
 #    ifdef RAW_ENABLE
-button_state_t button_state = {0};
+button_state_t button_state = default_button_state;
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-    hid_report_button_t report = {0};
+    hid_report_button_t report = default_hid_report_button;
     uint8_t pressed = (record->event.pressed) ? 1 : 0;
     uint8_t released = 1 - pressed;
     switch (record->event.key.col)
