@@ -336,33 +336,40 @@ static void housekeeping_task_knob_modes(void) {
         }
     }
 
+    // apply reverse
+    if (knob_config.reverse) {
+        delta *= -1;
+    }
+
     // apply sensitivity
+    delta *= knob_config.sensitivity;
+
+#    ifdef RAW_ENABLE
+    hid_report_wheel.modified_delta = (int32_t)delta;
+#    endif  // RAW_ENABLE
+
+    // apply mode scale
     switch (knob_config.mode) {
         case KNOB_MODE_OFF:
             return;  // unreachable
 #    ifdef ENCODER_ENABLE
         case KNOB_MODE_ENCODER:
-            delta *= knob_config.sensitivity * KNOB_SENS_SCALE_ENCODER;
+            delta *= KNOB_SENS_SCALE_ENCODER;
             break;
 #    endif  // ENCODER_ENABLE
 #    ifdef POINTING_DEVICE_ENABLE
         case KNOB_MODE_WHEEL_VERTICAL...KNOB_MODE_WHEEL_HORIZONTAL:
-            delta *= knob_config.sensitivity * KNOB_SENS_SCALE_WHEEL;
+            delta *= KNOB_SENS_SCALE_WHEEL;
             break;
         case KNOB_MODE_DRAG_VERTICAL...KNOB_MODE_ADAPTIVE_DRAG_DIAGONAL:
-            delta *= knob_config.sensitivity * KNOB_SENS_SCALE_DRAG;
+            delta *= KNOB_SENS_SCALE_DRAG;
             break;
 #    endif  // POINTING_DEVICE_ENABLE
 #    ifdef MIDI_ENABLE
         case KNOB_MODE_MIDI:
-            delta *= knob_config.sensitivity * KNOB_SENS_SCALE_MIDI;
+            delta *= KNOB_SENS_SCALE_MIDI;
             break;
 #    endif  // MIDI_ENABLE
-    }
-
-    // apply reverse
-    if (knob_config.reverse) {
-        delta *= -1;
     }
 
     // truncate to integer and save remainder
@@ -375,11 +382,8 @@ static void housekeeping_task_knob_modes(void) {
     report_mouse_t mouse;
 #    endif  // POINTING_DEVICE_ENABLE
 #    ifdef RAW_ENABLE
-    hid_report_wheel.modified_delta = (int32_t)delta_truncated;
     if (hid_report_wheel.raw_delta > ((int16_t)hid_config.wheel_deadzone)
-     || hid_report_wheel.raw_delta < -((int16_t)hid_config.wheel_deadzone)
-     || hid_report_wheel.modified_delta > ((int32_t)hid_config.wheel_deadzone)
-     || hid_report_wheel.modified_delta < -((int32_t)hid_config.wheel_deadzone)) {
+     || hid_report_wheel.raw_delta < -((int16_t)hid_config.wheel_deadzone)) {
         raw_hid_send((uint8_t*)&hid_report_wheel, sizeof(hid_report_wheel_t));
     }
 #    endif  // RAW_ENABLE
