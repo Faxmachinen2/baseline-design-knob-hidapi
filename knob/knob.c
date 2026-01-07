@@ -75,6 +75,95 @@ int16_t get_as5600_delta(void) {
 #ifndef KNOB_MINIMAL
 
 // ============================================================================
+// HID API
+// ============================================================================
+
+#    ifdef RAW_ENABLE
+#    define HID_REPORT_ID_SET_CONFIG 0xb1
+#    define HID_REPORT_ID_SET_LAYER 0xb2
+#    define HID_REPORT_ID_SET_RGB 0xb3
+#    define HID_REPORT_ID_WHEEL 0xa1
+#    define HID_REPORT_ID_BUTTON 0xa2
+#    define MINIMUM_UPDATE_THROTTLE 10
+#    define HID_WHEEL_SCALE (1.0 / (4096.0 * 6))  // VIA sensitivity multiplies by 2-10x, so this gives 1/revolution at 50% sensitivity
+
+STATIC_ASSERT(sizeof(float) == 4);
+typedef float float32_t;
+
+typedef struct {
+    uint16_t wheel_deadzone;
+    uint16_t update_throttle;
+} hid_config_t;
+const hid_config_t default_hid_config = { .wheel_deadzone = 8, .update_throttle = KNOB_THROTTLE_MS };
+
+typedef struct {
+    uint8_t report_id;
+    uint8_t set_wheel_deadzone : 1;
+    uint8_t set_update_throttle : 1;
+    uint8_t : 6;  // Reserved
+    uint8_t reserved00;
+    uint8_t reserved01;
+    uint16_t wheel_deadzone;
+    uint16_t update_throttle;
+    uint8_t reserved02[24];
+} __attribute__((packed)) hid_report_set_config_t;
+STATIC_ASSERT(sizeof(hid_report_set_config_t) == 32);
+
+typedef struct {
+    uint8_t report_id;
+    uint8_t layer;
+    uint8_t reserved00[30];
+} __attribute__((packed)) hid_report_set_layer_t;
+STATIC_ASSERT(sizeof(hid_report_set_layer_t) == 32);
+
+typedef struct {
+    uint8_t report_id;
+    uint8_t set_right : 1;
+    uint8_t set_middle: 1;
+    uint8_t set_left: 1;
+    uint8_t : 5;
+    rgb_t left;
+    rgb_t middle;
+    rgb_t right;
+    uint8_t reserved00[21];
+} __attribute__((packed)) hid_report_set_rgb_t;
+STATIC_ASSERT(sizeof(hid_report_set_rgb_t) == 32);
+
+typedef struct {
+    uint8_t report_id;
+    uint8_t layer;
+    uint8_t raw_clockwise : 1;
+    uint8_t : 7;  // Padding
+    int16_t raw_delta;  // Without acceleration/sensitivity, 1 rotation = 4096
+    uint8_t processed_clockwise : 1;
+    uint8_t : 7;  // Padding
+    float32_t processed_delta;  // With acceleration/sensitivity, 1 rotation = 1.0 (at sensitivity 1)
+    uint8_t pad00[22];  // Padding
+} __attribute__((packed)) hid_report_wheel_t;
+STATIC_ASSERT(sizeof(hid_report_wheel_t) == 32);
+const hid_report_wheel_t default_hid_report_wheel = { .report_id = HID_REPORT_ID_WHEEL };
+
+typedef struct {
+    uint8_t right : 1;
+    uint8_t middle : 1;
+    uint8_t left : 1;
+    uint8_t : 5;  // pad
+} __attribute__((packed)) button_states_t;
+const button_states_t default_button_states = { 0 };
+
+typedef struct {
+    uint8_t report_id;
+    uint8_t layer;
+    uint8_t pressed;
+    uint8_t button_id;
+    button_states_t button_states;
+    uint8_t pad00[27];  // Pad
+} __attribute__((packed)) hid_report_button_t;
+STATIC_ASSERT(sizeof(hid_report_button_t) == 32);
+const hid_report_button_t default_hid_report_button = { .report_id = HID_REPORT_ID_BUTTON };
+#    endif  // RAW_ENABLE
+
+// ============================================================================
 // ACCELERATION HELPERS
 // ============================================================================
 
@@ -134,66 +223,13 @@ typedef struct {
 #    endif  // POINTING_DEVICE_ENABLE
 } knob_state_t;
 
-#    ifdef RAW_ENABLE
-#    define HID_REPORT_ID_SET_CONFIG 0xb1
-#    define HID_REPORT_ID_WHEEL 0xa1
-#    define HID_REPORT_ID_BUTTON 0xa2
-#    define MINIMUM_UPDATE_THROTTLE 10
-
-typedef struct {
-    uint16_t wheel_deadzone;
-    uint16_t update_throttle;
-} hid_config_t;
-const hid_config_t default_hid_config = { .wheel_deadzone = 5, .update_throttle = 2 * KNOB_THROTTLE_MS };
-hid_config_t hid_config = default_hid_config;
-
-typedef struct {
-    uint8_t report_id;
-    uint16_t set_wheel_deadzone : 1;
-    uint16_t set_update_throttle : 1;
-    uint16_t : 14;  // Reserved
-    uint8_t reserved00;
-    uint16_t wheel_deadzone;
-    uint16_t update_throttle;
-    uint8_t reserved01[24];
-} __attribute__((packed)) hid_report_set_config_t;
-STATIC_ASSERT(sizeof(hid_report_set_config_t) == 32);
-
-typedef struct {
-    uint8_t report_id;
-    uint8_t layer;
-    int16_t raw_delta;  // Without acceleration/sensitivity
-    uint8_t clockwise : 1;
-    uint8_t : 7;  // Padding
-    int32_t modified_delta;  // With acceleration/sensitivity
-    uint8_t pad00[23];  // Padding
-} __attribute__((packed)) hid_report_wheel_t;
-STATIC_ASSERT(sizeof(hid_report_wheel_t) == 32);
-const hid_report_wheel_t default_hid_report_wheel = { .report_id = HID_REPORT_ID_WHEEL };
-
-typedef struct {
-    uint8_t left : 1;
-    uint8_t middle : 1;
-    uint8_t right : 1;
-    uint8_t : 5;  // pad
-} __attribute__((packed)) button_state_t;
-const button_state_t default_button_state = { 0 };
-
-typedef struct {
-    uint8_t report_id;
-    uint8_t layer;
-    button_state_t state;
-    button_state_t pressed;
-    button_state_t released;
-    uint8_t pad00[27];  // Pad
-} __attribute__((packed)) hid_report_button_t;
-STATIC_ASSERT(sizeof(hid_report_button_t) == 32);
-const hid_report_button_t default_hid_report_button = { .report_id = HID_REPORT_ID_BUTTON };
-#    endif  // RAW_ENABLE
-
 knob_config_t knob_config = {0};
 knob_state_t knob_state = {0};
 uint32_t current_time = 0;
+
+#    ifdef RAW_ENABLE
+hid_config_t hid_config = default_hid_config;
+#    endif  // RAW_ENABLE
 
 // ============================================================================
 // DRAG HELPERS
@@ -288,6 +324,8 @@ static void housekeeping_task_knob_modes(void) {
     }
 
     // reset state after a period of no activity
+    // Bug: Should probably keep returning while knob is inactive,
+    // but only does it once every KNOB_TIMEOUT_MS.
     if (as5600_delta == 0) {
         if (TIMER_DIFF_32(current_time, knob_state.last_motion_time) > KNOB_TIMEOUT_MS) {
             reset_knob_state();
@@ -298,7 +336,7 @@ static void housekeeping_task_knob_modes(void) {
         knob_state.last_motion_time = current_time;
     }
 
-// throttle rate at which actions are performed
+    // throttle rate at which actions are performed
 #    ifdef RAW_ENABLE
     if (TIMER_DIFF_32(current_time, knob_state.last_action_time) < hid_config.update_throttle) {
 #    else
@@ -312,7 +350,7 @@ static void housekeeping_task_knob_modes(void) {
     hid_report_wheel_t hid_report_wheel = default_hid_report_wheel;
     hid_report_wheel.layer = get_highest_layer(layer_state);
     hid_report_wheel.raw_delta = knob_state.accumulator;
-    hid_report_wheel.clockwise = (knob_state.accumulator > 0) ? 1 : 0;
+    hid_report_wheel.raw_clockwise = (hid_report_wheel.raw_delta > 0) ? 1 : 0;
 #    endif  // RAW_ENABLE
 
     // zero out the accumulator when ready to perform an action
@@ -345,7 +383,12 @@ static void housekeeping_task_knob_modes(void) {
     delta *= knob_config.sensitivity;
 
 #    ifdef RAW_ENABLE
-    hid_report_wheel.modified_delta = (int32_t)delta;
+    hid_report_wheel.processed_delta = delta * HID_WHEEL_SCALE;
+    hid_report_wheel.processed_clockwise = (hid_report_wheel.processed_delta > 0) ? 1 : 0;
+    if (hid_report_wheel.raw_delta > ((int16_t)hid_config.wheel_deadzone)
+     || hid_report_wheel.raw_delta < -((int16_t)hid_config.wheel_deadzone)) {
+        raw_hid_send((uint8_t*)&hid_report_wheel, sizeof(hid_report_wheel_t));
+    }
 #    endif  // RAW_ENABLE
 
     // apply mode scale
@@ -381,12 +424,7 @@ static void housekeeping_task_knob_modes(void) {
 #    ifdef POINTING_DEVICE_ENABLE
     report_mouse_t mouse;
 #    endif  // POINTING_DEVICE_ENABLE
-#    ifdef RAW_ENABLE
-    if (hid_report_wheel.raw_delta > ((int16_t)hid_config.wheel_deadzone)
-     || hid_report_wheel.raw_delta < -((int16_t)hid_config.wheel_deadzone)) {
-        raw_hid_send((uint8_t*)&hid_report_wheel, sizeof(hid_report_wheel_t));
-    }
-#    endif  // RAW_ENABLE
+
     switch (knob_config.mode) {
 #    ifdef ENCODER_ENABLE
         case KNOB_MODE_ENCODER:
@@ -525,20 +563,38 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
 #    endif  // VIA_ENABLE
     assert(length == 32);
     if (data[0] == HID_REPORT_ID_SET_CONFIG) {
-        hid_report_set_config_t *config = (hid_report_set_config_t*)data;
-        if (config->set_wheel_deadzone > 0) {
-            hid_config.wheel_deadzone = config->wheel_deadzone;
+        hid_report_set_config_t *report = (hid_report_set_config_t*)data;
+        if (report->set_wheel_deadzone > 0) {
+            hid_config.wheel_deadzone = report->wheel_deadzone;
         }
-        if (config->set_update_throttle > 0) {
-            hid_config.update_throttle = config->update_throttle < MINIMUM_UPDATE_THROTTLE ? MINIMUM_UPDATE_THROTTLE : config->update_throttle;
+        if (report->set_update_throttle > 0) {
+            hid_config.update_throttle = report->update_throttle < MINIMUM_UPDATE_THROTTLE ? MINIMUM_UPDATE_THROTTLE : report->update_throttle;
         }
+    }
+    else if (data[0] == HID_REPORT_ID_SET_LAYER) {
+        hid_report_set_layer_t *report = (hid_report_set_layer_t*)data;
+        if (report->layer < 32) {
+            layer_move(report->layer);
+        }
+    }
+    else if (data[0] == HID_REPORT_ID_SET_RGB) {
+        hid_report_set_rgb_t *report = (hid_report_set_rgb_t*)data;
+        if (report->set_left > 0) {
+            rgblight_setrgb_at(report->left.r, report->left.g, report->left.b, 0);
+        }
+        if (report->set_middle > 0) {
+            rgblight_setrgb_at(report->middle.r, report->middle.g, report->middle.b, 1);
+        }
+        if (report->set_right > 0) {
+            rgblight_setrgb_at(report->right.r, report->right.g, report->right.b, 2);
+        }
+    }
 #    ifdef VIA_ENABLE
-        return true;  // Message handled
-    }
     else {
-        return false;
-#    endif  // VIA_ENABLE
+        return false;  // Message not handled by HID api
     }
+    return true;
+#    endif  // VIA_ENABLE
 }
 #    endif  // RAW_ENABLE
 
@@ -566,29 +622,25 @@ void housekeeping_task_kb(void) {
 }
 
 #    ifdef RAW_ENABLE
-button_state_t button_state = default_button_state;
+button_states_t button_states = default_button_states;
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     hid_report_button_t report = default_hid_report_button;
     report.layer = get_highest_layer(layer_state);
-
-    uint8_t pressed = (record->event.pressed) ? 1 : 0;
-    uint8_t released = 1 - pressed;
-    switch (record->event.key.col)
+    report.pressed = (record->event.pressed) ? 1 : 0;
+    report.button_id = record->event.key.col;
+    switch (report.button_id)
     {
         case 0:
-            button_state.left = report.pressed.left = pressed;
-            report.released.left = released;
+            button_states.left = report.pressed;
             break;
         case 1:
-            button_state.middle = report.pressed.middle = pressed;
-            report.released.middle = released;
+            button_states.middle = report.pressed;
             break;
         case 2:
-            button_state.right = report.pressed.right = pressed;
-            report.released.right = released;
+            button_states.right = report.pressed;
             break;
     }
-    report.state = button_state;
+    report.button_states = button_states;
     raw_hid_send((uint8_t*)&report, sizeof(hid_report_button_t));
 
     return true;  // Tell QMK to keep processing
