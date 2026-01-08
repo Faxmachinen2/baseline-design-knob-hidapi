@@ -133,10 +133,10 @@ typedef struct {
     uint8_t report_id;
     uint8_t layer;
     uint8_t raw_clockwise : 1;
-    uint8_t : 7;  // Padding
+    uint8_t : 7;
     int16_t raw_delta;  // Without acceleration/sensitivity, 1 rotation = 4096
     uint8_t processed_clockwise : 1;
-    uint8_t : 7;  // Padding
+    uint8_t : 7;
     float32_t processed_delta;  // With acceleration/sensitivity, 1 rotation = 1.0 (at sensitivity 1)
     uint8_t pad00[22];  // Padding
 } __attribute__((packed)) hid_report_wheel_t;
@@ -154,7 +154,8 @@ const button_states_t default_button_states = { 0 };
 typedef struct {
     uint8_t report_id;
     uint8_t layer;
-    uint8_t pressed;
+    uint8_t pressed : 1;
+    uint8_t : 7;
     uint8_t button_id;
     button_states_t button_states;
     uint8_t pad00[27];  // Pad
