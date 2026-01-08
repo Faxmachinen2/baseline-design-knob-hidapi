@@ -1,8 +1,8 @@
 # KNOB HID API
 
-This project is a fork of [eynsai's improved KNOB v2.1 firmware](https://github.com/eynsai/baseline-design-knob). It adds a a number of HID reports that can be sent to and received from the KNOB.
+This is a fork of [eynsai's improved KNOB v2.1 firmware](https://github.com/eynsai/baseline-design-knob). It adds a a number of HID reports that can be sent to and received from the KNOB.
 
-## Report overview
+## HID report overview
 
 The following reports are available:
 
@@ -27,8 +27,8 @@ The following reports are available:
 
 1. Install the [QMK CLI](https://docs.qmk.fm/cli)
 1. Run `qmk setup` and answer yes when it asks to check out the `qmk_firmware` repository.
-1. Copy or link the `/knob-hidapi` folder into `qmk_firmware/keyboards` (so that `knob.c` ends up in `qmk_firmware/keyboards/knob-hidapi/knob.c`.
-1. Run `qmk flash --kb knob-hidapi --km via`
+1. Copy or link this repository to `qmk_firmware/keyboards/baseline_design_hidapi` (so that `knob.c` ends up in `qmk_firmware/keyboards/baseline_design_hidapi/knob/knob.c`).
+1. Run `qmk flash --kb baseline_design_hidapi/knob --km via`
 
 **After installation**
 
@@ -45,7 +45,7 @@ All reports are sent and received on the following channel. This channel is shar
 
 Reports must be 32 bytes long; pad to length with zeroes.
 
-**Type notation**
+**A note on notation**
 
 The text `(int16le)` means:
 - **int**: signed integer type
@@ -56,7 +56,7 @@ The text `(uint8:1)` means:
 - **uint**: unsigned integer type
 - **:1**: this is just one bit of the type
 
-Multiple bits can occupy the same underlying type, and they're always right-aligned. Any undefined bits are reserved.
+Multiple bits can occupy the same underlying type, and they're always right-aligned. Any undefined bits are reserved and should be set to 0.
 
 
 ### Rotary dial movement
@@ -75,6 +75,7 @@ This report is sent by the device while the rotary dial moves. How often the mes
         |         \              (uint8:1) Raw clockwise indicator
          \          (uint8) Current layer
            (uint8) Report ID: 0xa1
+    .
 
 - **(uint8) Report ID**: Always 0xa1
 - **(uint8) Current layer**: The currently active layer on the device. If multiple layers are active, this is the highest one.
@@ -101,13 +102,14 @@ This report is sent whenever a button is pressed or released.
     |  0xa2  |  0x01  |.......1|  0x02  |.....011|   27 padding bytes  |
        ____     ____          .   ____        ...
         |        |            |    |          || \ 
-        |        |            |    |          | \  (bit) Right button state
-        |        |            |    |           \  (bit) Middle button state
-        |        |            |     \            (bit) Left button state
+        |        |            |    |          | \  (uint8:1) Right button state
+        |        |            |    |           \  (uint8:1) Middle button state
+        |        |            |     \            (uint8:1) Left button state
         |        |             \      (uint8) Button ID
-        |         \              (bit) Press indicator
+        |         \              (uint8:1) Press indicator
          \          (uint8) Current layer
            (uint8) Report ID: 0xa2
+    .
 
 - **(uint8) Report ID**: Always 0xa2
 - **(uint8) Current layer**: The currently active layer on the device. If multiple layers are active, this is the highest one.
@@ -128,9 +130,10 @@ Send this report to configure the device. The configuration only persists while 
         |           ||                           |                  \
         |           ||                            \                   (ushort16le)  Throttle value
         |           | \                             (ushort16le) Deadzone value
-        |            \  (bit) Set deazone
-         \             (bit) Set throttle
+        |            \  (uint8:1) Set deazone
+         \             (uint8:1) Set throttle
            (uint8) Report ID: 0xb1
+    .
 
 - **(uint8) Report ID**: Always 0xb1
 - **(uint8:1) Set throttle/deadzone**: A 1 indicates that the throtte/deadzone value should be set.
@@ -150,6 +153,7 @@ Send this report to change the active layer on the device.
         |         \
          \          (uint8) Target layer
            (uint8) Report ID: 0xb2
+    .
 
 - **(uint8) Report ID**: Always 0xb2
 - **(uint8) Target layer**: The layer to change to.
@@ -173,10 +177,11 @@ Send this report to set the red, green and blue components of each LED on the de
         |          |||     |        \          (uint8) Left blue
         |          |||      \         (uint8) Left green
         |          || \       (uint8) Left red
-        |          | \  (bit) Set right LED
-        |          \   (bit) Set middle LED
-         \           (bit) Set left LED
+        |          | \  (uint8:1) Set right LED
+        |          \   (uint8:1) Set middle LED
+         \           (uint8:1) Set left LED
            (uint8) Report ID: 0xb3
+    .
 
 - **(uint8) Report ID**: Always 0xb3
 - **(uint8:1) Set left/middle/right LED**: Set the LED on 1, otherwise leave it as it was.
