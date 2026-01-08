@@ -20,19 +20,16 @@ The following reports are available:
 ## How to install
 
 **From precompiled HEX**
-1. Download the HEX file from the latest release.
+1. Download the latest release ZIP and extract it.
 1. Run `qmk flash '/path/to/hexfile.hex'`
+1. Load the JSON file in VIA ([see these instructions](https://github.com/BaselineDesign/BaselineDesign-Knob/tree/main/KNOB_V2_QMK/knobv2#using-knob-v2-with-via)).
 
 **From source**
-
 1. Install the [QMK CLI](https://docs.qmk.fm/cli)
 1. Run `qmk setup` and answer yes when it asks to check out the `qmk_firmware` repository.
 1. Copy or link this repository to `qmk_firmware/keyboards/baseline_design_hidapi` (so that `knob.c` ends up in `qmk_firmware/keyboards/baseline_design_hidapi/knob/knob.c`).
 1. Run `qmk flash --kb baseline_design_hidapi/knob --km via`
-
-**After installation**
-
-Load the JSON file `knob-hidapi/keymaps/via/via.json` in VIA ([see these instructions](https://github.com/BaselineDesign/BaselineDesign-Knob/tree/main/KNOB_V2_QMK/knobv2#using-knob-v2-with-via)).
+1. Load the JSON file at `knob/keymaps/via/via.json` in VIA ([see these instructions](https://github.com/BaselineDesign/BaselineDesign-Knob/tree/main/KNOB_V2_QMK/knobv2#using-knob-v2-with-via)).
 
 ## Reports
 
