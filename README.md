@@ -2,6 +2,24 @@
 
 This is a fork of [eynsai's improved KNOB v2.1 firmware](https://github.com/eynsai/baseline-design-knob). It adds a a number of HID reports that can be sent to and received from the KNOB.
 
+## How to install
+
+You can either compile the firmware yourself, or download the precompiled HEX file.
+Either way you will first need to set up QMK so that you can flash the firmware to your device:
+
+1. Install the [QMK CLI](https://docs.qmk.fm/cli)
+1. Run `qmk setup` and answer yes when it asks to download the `qmk_firmware` repository.
+
+**Alternative 1: Compiling the source**
+1. Copy or link this repository to `qmk_firmware/keyboards/baseline_design_hidapi` (so that `knob.c` ends up in `qmk_firmware/keyboards/baseline_design_hidapi/knob/knob.c`).
+1. Run `qmk flash --kb baseline_design_hidapi/knob --km via`
+1. Load the JSON file at `knob/keymaps/via/via.json` in VIA ([see these instructions](https://github.com/BaselineDesign/BaselineDesign-Knob/tree/main/KNOB_V2_QMK/knobv2#using-knob-v2-with-via)).
+
+**Alternative 2: Get precompiled HEX**
+1. Download the latest release ZIP and extract it.
+1. Run `qmk flash '/path/to/hexfile.hex'`
+1. Load `via.json` from the ZIP in VIA ([see these instructions](https://github.com/BaselineDesign/BaselineDesign-Knob/tree/main/KNOB_V2_QMK/knobv2#using-knob-v2-with-via)).
+
 ## HID report overview
 
 The following reports are available:
@@ -12,24 +30,10 @@ The following reports are available:
 
 **Host --> Device**
 - [Set configuration](#set-configuration)
-  - Update rate
-  - Deadzone
+  - Dial update rate
+  - Dial deadzone
 - [Set layer](#set-layer)
 - [Set RGB](#set-rgb) of each button individually
-
-## How to install
-
-**From precompiled HEX**
-1. Download the latest release ZIP and extract it.
-1. Run `qmk flash '/path/to/hexfile.hex'`
-1. Load the JSON file in VIA ([see these instructions](https://github.com/BaselineDesign/BaselineDesign-Knob/tree/main/KNOB_V2_QMK/knobv2#using-knob-v2-with-via)).
-
-**From source**
-1. Install the [QMK CLI](https://docs.qmk.fm/cli)
-1. Run `qmk setup` and answer yes when it asks to check out the `qmk_firmware` repository.
-1. Copy or link this repository to `qmk_firmware/keyboards/baseline_design_hidapi` (so that `knob.c` ends up in `qmk_firmware/keyboards/baseline_design_hidapi/knob/knob.c`).
-1. Run `qmk flash --kb baseline_design_hidapi/knob --km via`
-1. Load the JSON file at `knob/keymaps/via/via.json` in VIA ([see these instructions](https://github.com/BaselineDesign/BaselineDesign-Knob/tree/main/KNOB_V2_QMK/knobv2#using-knob-v2-with-via)).
 
 ## Reports
 
@@ -133,7 +137,7 @@ Send this report to configure the device. The configuration only persists while 
     .
 
 - **(uint8) Report ID**: Always 0xb1
-- **(uint8:1) Set throttle/deadzone**: A 1 indicates that the throtte/deadzone value should be set.
+- **(uint8:1) Set throttle/deadzone**: A 1 indicates that the throtte/deadzone config should be updated to the provided value.
 - **(ushort16le) Deadzone value**: How much the dial has to move before a report is sent, in 4096ths of a revolution.
   - A value of 0 triggers events if you so much as breathe on the dial. 10 is a good balance.
 - **(ushort16le) Throttle value**: Delay in milliseconds between events while the dial turns. 10 is the minimum value.
